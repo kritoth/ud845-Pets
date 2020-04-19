@@ -88,12 +88,6 @@ public class PetProvider extends ContentProvider {
 
     @Nullable
     @Override
-    public String getType(@NonNull Uri uri) {
-        return null;
-    }
-
-    @Nullable
-    @Override
     public Uri insert(@NonNull Uri uri, @Nullable ContentValues contentValues) {
         // Gets the database in write mode
         SQLiteDatabase db = mDbHelper.getWritableDatabase();
@@ -120,12 +114,89 @@ public class PetProvider extends ContentProvider {
     }
 
     @Override
-    public int delete(@NonNull Uri uri, @Nullable String s, @Nullable String[] strings) {
-        return 0;
+    public int update(@NonNull Uri uri, @Nullable ContentValues contentValues, @Nullable String selection, @Nullable String[] selectionArgs) {
+        // If there is no data to be updated return early
+        if( contentValues.size() == 0) return 0;
+
+        // Gets the database in write mode
+        SQLiteDatabase db = mDbHelper.getWritableDatabase();
+        // match the Uri and get the result code
+        int match = sUriMatcher.match(uri);
+        // create the Uri to be returned
+        int numberOfRowsUpdated;
+
+        switch (match) {
+            case PETS:
+                // Insert a new row for pet in the database, returning the ID of that new row.
+                numberOfRowsUpdated = db.update(
+                        PetContract.PetEntry.TABLE_NAME,
+                        contentValues,
+                        selection,
+                        selectionArgs);
+                if(numberOfRowsUpdated == -1){
+                    Log.e(TAG, "Failed to insert row for the Uri: " + uri);
+                    return numberOfRowsUpdated;
+                }
+                break;
+
+            case PET_ID:
+                if(selection.isEmpty()) {
+                    //Since the Uri was sent as pointing to one of the rows the selection must be
+                    // that row, even if it is empty, So
+                    // (1) here the "_id" column name is selected, to have the SQL command: "WHERE _id="
+                    selection = PetContract.PetEntry._ID + "=?";
+                }
+                if(selectionArgs.length == 0){
+                    // (2) here the row number is set as argument, to finish the SQL command: "WHERE _id=<#>"
+                    selectionArgs = new String[] {String.valueOf(ContentUris.parseId(uri))};
+                }
+                // make the query and get the cursor back
+                numberOfRowsUpdated = db.update(
+                        PetContract.PetEntry.TABLE_NAME,   // The table to query
+                        contentValues,   // Values to update
+                        selection,       // The columns for the WHERE clause
+                        selectionArgs);  // The values for the WHERE clause
+                break;
+
+            default:
+                throw new IllegalArgumentException("Cannot update with the URI: " + uri);
+        }
+        return numberOfRowsUpdated;
     }
 
+
     @Override
-    public int update(@NonNull Uri uri, @Nullable ContentValues contentValues, @Nullable String s, @Nullable String[] strings) {
-        return 0;
+    public int delete(@NonNull Uri uri, @Nullable String selection, @Nullable String[] selectionArgs) {
+
+        // Get writeable database
+        SQLiteDatabase database = mDbHelper.getWritableDatabase();
+
+        final int match = sUriMatcher.match(uri);
+        switch (match) {
+            case PETS:
+                // Delete all rows that match the selection and selection args
+                return database.delete(PetContract.PetEntry.TABLE_NAME, selection, selectionArgs);
+            case PET_ID:
+                // Delete a single row given by the ID in the URI
+                selection = PetContract.PetEntry._ID + "=?";
+                selectionArgs = new String[] { String.valueOf(ContentUris.parseId(uri)) };
+                return database.delete(PetContract.PetEntry.TABLE_NAME, selection, selectionArgs);
+            default:
+                throw new IllegalArgumentException("Deletion is not supported for " + uri);
+        }
+    }
+
+    @Nullable
+    @Override
+    public String getType(@NonNull Uri uri) {
+        final int match = sUriMatcher.match(uri);
+        switch (match) {
+            case PETS:
+                return PetContract.PetEntry.CONTENT_LIST_TYPE;
+            case PET_ID:
+                return PetContract.PetEntry.CONTENT_ITEM_TYPE;
+            default:
+                throw new IllegalStateException("Unknown URI " + uri + " with match " + match);
+        }
     }
 }
