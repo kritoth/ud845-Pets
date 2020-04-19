@@ -9,8 +9,10 @@ import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.util.Log;
 
 public class PetProvider extends ContentProvider {
+    private static final String TAG = PetProvider.class.getSimpleName();
 
     private PetDbHelper mDbHelper;
 
@@ -93,18 +95,28 @@ public class PetProvider extends ContentProvider {
     @Nullable
     @Override
     public Uri insert(@NonNull Uri uri, @Nullable ContentValues contentValues) {
-
         // Gets the database in write mode
         SQLiteDatabase db = mDbHelper.getWritableDatabase();
+        // match the Uri and get the result code
+        int match = sUriMatcher.match(uri);
+        // create the Uri to be returned
+        Uri insertedRowUri;
 
-        // Create a ContentValues object where column names are the keys,
-        // and pet attributes from the editor are the values.
-        ContentValues values = new ContentValues(contentValues);
+        switch (match) {
+            case PETS:
+                // Insert a new row for pet in the database, returning the ID of that new row.
+                long newRowId = db.insert(PetContract.PetEntry.TABLE_NAME, null, contentValues);
+                if(newRowId == -1){
+                    Log.e(TAG, "Failed to insert row for the Uri: " + uri);
+                    return null;
+                }
+                insertedRowUri = ContentUris.withAppendedId(uri, newRowId);
+                break;
 
-        // Insert a new row for pet in the database, returning the ID of that new row.
-        long newRowId = db.insert(PetContract.PetEntry.TABLE_NAME, null, values);
-
-        return uri;
+            default:
+                throw new IllegalArgumentException("Cannot insert with the URI: " + uri);
+        }
+        return insertedRowUri;
     }
 
     @Override
