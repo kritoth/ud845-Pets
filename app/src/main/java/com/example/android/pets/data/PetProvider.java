@@ -1,17 +1,27 @@
 package com.example.android.pets.data;
 
 import android.content.ContentProvider;
+import android.content.ContentUris;
 import android.content.ContentValues;
+import android.content.UriMatcher;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.Uri;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
-import android.widget.Toast;
 
 public class PetProvider extends ContentProvider {
 
     private PetDbHelper mDbHelper;
+
+    private static final int PETS = 100;
+    private static final int PET_ID = 101;
+
+    private static final UriMatcher sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
+    static {
+        sUriMatcher.addURI(PetContract.CONTENT_AUTHORITY, PetContract.PATH_PETS, PETS);
+        sUriMatcher.addURI(PetContract.CONTENT_AUTHORITY, PetContract.PATH_PETS + "/#", PET_ID);
+    }
 
     @Override
     public boolean onCreate() {
@@ -22,23 +32,56 @@ public class PetProvider extends ContentProvider {
     @Nullable
     @Override
     public Cursor query(@NonNull Uri uri, @Nullable String[] projection, @Nullable String selection, @Nullable String[] selectionArgs, @Nullable String sortOrder) {
-        if (uri == null) return null;
-
-        // Create and/or open a database to read from it
+        // if thre is no Uri, return early
+        if (uri == null) {
+            throw new IllegalArgumentException("Cannot query, no URI passed!");
+        }
+        // Open a database to read from it
         SQLiteDatabase db = mDbHelper.getReadableDatabase();
+        // match the Uri and get the result code
+        int match = sUriMatcher.match(uri);
 
+        Cursor cursor;
 
-        // Perform a query on the pets table
-        Cursor cursor = db.query(
-                PetContract.PetEntry.TABLE_NAME,   // The table to query
-                projection,            // The columns to return
-                selection,                  // The columns for the WHERE clause
-                selectionArgs,                  // The values for the WHERE clause
-                null,                  // Don't group the rows
-                null,                  // Don't filter by row groups
-                sortOrder);                   // The sort order
-
+        // According to the result code, Perform the type of query on the pets table
+        switch (match){
+            case PETS:
+                cursor = db.query(
+                        PetContract.PetEntry.TABLE_NAME,   // The table to query
+                        projection,            // The columns to return
+                        selection,                  // The columns for the WHERE clause
+                        selectionArgs,                  // The values for the WHERE clause
+                        null,                  // Don't group the rows
+                        null,                  // Don't filter by row groups
+                        sortOrder);                   // The sort order
+                        break;
+            case PET_ID:
+                if(selection.isEmpty()) {
+                    //Since the Uri was sent as pointing to one of the rows the selection must be
+                    // that row, even if it is empty, So
+                    // (1) here the "_id" column name is selected, to have the SQL command: "WHERE _id="
+                    // (
+                    selection = PetContract.PetEntry._ID + "=?";
+                }
+                if(selectionArgs.length == 0){
+                    // (2) here the row number is set as argument, to finish the SQL command: "WHERE _id=<#>"
+                    selectionArgs = new String[] {String.valueOf(ContentUris.parseId(uri))};
+                }
+                // make the query and get the cursor back
+                cursor = db.query(
+                        PetContract.PetEntry.TABLE_NAME,   // The table to query
+                        projection,     // The columns to return "SELECT <column1>, <column2>"
+                        selection,      // The columns for the WHERE clause
+                        selectionArgs,  // The values for the WHERE clause
+                        null,   // Don't group the rows
+                        null,    // Don't filter by row groups
+                        sortOrder);     // The sort order: "ORDER BY="
+                        break;
+                default:
+                    throw new IllegalArgumentException("Cannot query, unknown URI: " + uri);
+        }
         return cursor;
+
     }
 
     @Nullable
